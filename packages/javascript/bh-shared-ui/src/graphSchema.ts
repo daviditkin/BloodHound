@@ -30,6 +30,7 @@ export enum ActiveDirectoryNodeKind {
     EnterpriseCA = 'EnterpriseCA',
     NTAuthStore = 'NTAuthStore',
     CertTemplate = 'CertTemplate',
+    IssuancePolicy = 'IssuancePolicy',
 }
 export function ActiveDirectoryNodeKindToDisplay(value: ActiveDirectoryNodeKind): string | undefined {
     switch (value) {
@@ -63,6 +64,8 @@ export function ActiveDirectoryNodeKindToDisplay(value: ActiveDirectoryNodeKind)
             return 'NTAuthStore';
         case ActiveDirectoryNodeKind.CertTemplate:
             return 'CertTemplate';
+        case ActiveDirectoryNodeKind.IssuancePolicy:
+            return 'IssuancePolicy';
         default:
             return undefined;
     }
@@ -123,6 +126,8 @@ export enum ActiveDirectoryRelationshipKind {
     IssuedSignedBy = 'IssuedSignedBy',
     GoldenCert = 'GoldenCert',
     EnrollOnBehalfOf = 'EnrollOnBehalfOf',
+    OIDGroupLink = 'OIDGroupLink',
+    ExtendedByPolicy = 'ExtendedByPolicy',
     ADCSESC1 = 'ADCSESC1',
     ADCSESC3 = 'ADCSESC3',
     ADCSESC4 = 'ADCSESC4',
@@ -248,6 +253,10 @@ export function ActiveDirectoryRelationshipKindToDisplay(value: ActiveDirectoryR
             return 'GoldenCert';
         case ActiveDirectoryRelationshipKind.EnrollOnBehalfOf:
             return 'EnrollOnBehalfOf';
+        case ActiveDirectoryRelationshipKind.OIDGroupLink:
+            return 'OIDGroupLink';
+        case ActiveDirectoryRelationshipKind.ExtendedByPolicy:
+            return 'ExtendedByPolicy';
         case ActiveDirectoryRelationshipKind.ADCSESC1:
             return 'ADCSESC1';
         case ActiveDirectoryRelationshipKind.ADCSESC3:
@@ -288,6 +297,7 @@ export const EdgeCompositionRelationships = [
     'ADCSESC9b',
     'ADCSESC10a',
     'ADCSESC10b',
+    'ADCSESC13',
 ];
 export enum ActiveDirectoryKindProperties {
     AdminCount = 'admincount',
@@ -301,8 +311,11 @@ export enum ActiveDirectoryKindProperties {
     EnrollmentAgentRestrictionsCollected = 'enrollmentagentrestrictionscollected',
     IsUserSpecifiesSanEnabled = 'isuserspecifiessanenabled',
     IsUserSpecifiesSanEnabledCollected = 'isuserspecifiessanenabledcollected',
+    RoleSeparationEnabled = 'roleseparationenabled',
+    RoleSeparationEnabledCollected = 'roleseparationenabledcollected',
     HasBasicConstraints = 'hasbasicconstraints',
     BasicConstraintPathLength = 'basicconstraintpathlength',
+    UnresolvedPublishedTemplates = 'unresolvedpublishedtemplates',
     DNSHostname = 'dnshostname',
     CrossCertificatePair = 'crosscertificatepair',
     DistinguishedName = 'distinguishedname',
@@ -361,6 +374,10 @@ export enum ActiveDirectoryKindProperties {
     ValidityPeriod = 'validityperiod',
     OID = 'oid',
     HomeDirectory = 'homedirectory',
+    CertificatePolicy = 'certificatepolicy',
+    CertTemplateOID = 'certtemplateoid',
+    GroupLinkID = 'grouplinkid',
+    ObjectGUID = 'objectguid',
 }
 export function ActiveDirectoryKindPropertiesToDisplay(value: ActiveDirectoryKindProperties): string | undefined {
     switch (value) {
@@ -386,10 +403,16 @@ export function ActiveDirectoryKindPropertiesToDisplay(value: ActiveDirectoryKin
             return 'Is User Specifies San Enabled';
         case ActiveDirectoryKindProperties.IsUserSpecifiesSanEnabledCollected:
             return 'Is User Specifies San Enabled Collected';
+        case ActiveDirectoryKindProperties.RoleSeparationEnabled:
+            return 'Role Separation Enabled';
+        case ActiveDirectoryKindProperties.RoleSeparationEnabledCollected:
+            return 'Role Separation Enabled Collected';
         case ActiveDirectoryKindProperties.HasBasicConstraints:
             return 'Has Basic Constraints';
         case ActiveDirectoryKindProperties.BasicConstraintPathLength:
             return 'Basic Constraint Path Length';
+        case ActiveDirectoryKindProperties.UnresolvedPublishedTemplates:
+            return 'Unresolved Published Certificate Templates';
         case ActiveDirectoryKindProperties.DNSHostname:
             return 'DNS Hostname';
         case ActiveDirectoryKindProperties.CrossCertificatePair:
@@ -475,9 +498,9 @@ export function ActiveDirectoryKindPropertiesToDisplay(value: ActiveDirectoryKin
         case ActiveDirectoryKindProperties.AuthorizedSignatures:
             return 'Authorized Signatures Required';
         case ActiveDirectoryKindProperties.ApplicationPolicies:
-            return 'Application Policies';
+            return 'Application Policies Required';
         case ActiveDirectoryKindProperties.IssuancePolicies:
-            return 'Issuance Policies';
+            return 'Issuance Policies Required';
         case ActiveDirectoryKindProperties.SchemaVersion:
             return 'Schema Version';
         case ActiveDirectoryKindProperties.RequiresManagerApproval:
@@ -487,7 +510,7 @@ export function ActiveDirectoryKindPropertiesToDisplay(value: ActiveDirectoryKin
         case ActiveDirectoryKindProperties.EnrolleeSuppliesSubject:
             return 'Enrollee Supplies Subject';
         case ActiveDirectoryKindProperties.CertificateApplicationPolicy:
-            return 'Certificate Application Policies';
+            return 'Application Policy Extensions';
         case ActiveDirectoryKindProperties.CertificateNameFlag:
             return 'Certificate Name Flags';
         case ActiveDirectoryKindProperties.EffectiveEKUs:
@@ -506,6 +529,14 @@ export function ActiveDirectoryKindPropertiesToDisplay(value: ActiveDirectoryKin
             return 'OID';
         case ActiveDirectoryKindProperties.HomeDirectory:
             return 'Home Directory';
+        case ActiveDirectoryKindProperties.CertificatePolicy:
+            return 'Issuance Policy Extensions';
+        case ActiveDirectoryKindProperties.CertTemplateOID:
+            return 'Certificate Template OID';
+        case ActiveDirectoryKindProperties.GroupLinkID:
+            return 'Group Link ID';
+        case ActiveDirectoryKindProperties.ObjectGUID:
+            return 'Object GUID';
         default:
             return undefined;
     }

@@ -22,12 +22,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gofrs/uuid"
-	"github.com/specterops/bloodhound/dawgs/graph"
-	"github.com/specterops/bloodhound/dawgs/ops"
 	"github.com/specterops/bloodhound/log"
 	"github.com/specterops/bloodhound/src/api"
+	"github.com/specterops/bloodhound/src/auth"
+	"github.com/specterops/bloodhound/src/ctx"
 	"github.com/specterops/bloodhound/src/model"
+	"github.com/specterops/bloodhound/src/model/appcfg"
 )
 
 type DatabaseWipe struct {
@@ -41,10 +41,12 @@ func (s Resources) HandleDatabaseWipe(response http.ResponseWriter, request *htt
 
 	var (
 		payload DatabaseWipe
+		err     error
 		// use this struct to flag any fields that failed to delete
 		errors []string
 		// deleting collected graph data OR high value selectors starts analsyis
 		kickoffAnalysis bool
+		auditEntry      model.AuditEntry
 	)
 
 	if err := api.ReadJSONRequestPayloadLimited(&payload, request); err != nil {
@@ -66,27 +68,23 @@ func (s Resources) HandleDatabaseWipe(response http.ResponseWriter, request *htt
 		return
 	}
 
-	commitID, err := uuid.NewV4()
-	if err != nil {
+	if auditEntry, err = model.NewAuditEntry(
+		model.AuditLogActionDeleteBloodhoundData,
+		model.AuditLogStatusIntent,
+		model.AuditData{
+			"options": payload,
+		},
+	); err != nil {
 		api.WriteErrorResponse(
 			request.Context(),
-			api.BuildErrorResponse(http.StatusInternalServerError, fmt.Sprintf("failure generating uuid: %v", err.Error()), request),
+			api.BuildErrorResponse(http.StatusInternalServerError, api.ErrorResponseDetailsInternalServerError, request),
 			response,
 		)
 		return
 	}
 
-	auditEntry := &model.AuditEntry{
-		Action: model.AuditLogActionDeleteBloodhoundData,
-		Model: &model.AuditData{
-			"options": payload,
-		},
-		Status:   model.AuditLogStatusIntent,
-		CommitID: commitID,
-	}
-
 	// create an intent audit log
-	if err := s.DB.AppendAuditLog(request.Context(), *auditEntry); err != nil {
+	if err := s.DB.AppendAuditLog(request.Context(), auditEntry); err != nil {
 		api.WriteErrorResponse(
 			request.Context(),
 			api.BuildErrorResponse(http.StatusInternalServerError, "failure creating an intent audit log", request),
@@ -97,16 +95,41 @@ func (s Resources) HandleDatabaseWipe(response http.ResponseWriter, request *htt
 
 	// delete graph
 	if payload.DeleteCollectedGraphData {
-		if failed := s.deleteCollectedGraphData(request.Context(), auditEntry); failed {
-			errors = append(errors, "collected graph data")
+		if clearGraphDataFlag, err := s.DB.GetFlagByKey(request.Context(), appcfg.FeatureClearGraphData); err != nil {
+			api.WriteErrorResponse(
+				request.Context(),
+				api.BuildErrorResponse(http.StatusInternalServerError, "unable to inspect the feature flag for clearing graph data", request),
+				response,
+			)
+			return
+		} else if !clearGraphDataFlag.Enabled {
+			api.WriteErrorResponse(
+				request.Context(),
+				api.BuildErrorResponse(http.StatusBadRequest, "deleting graph data is currently disabled", request),
+				response,
+			)
+			return
 		} else {
-			kickoffAnalysis = true
+			var userId string
+			if user, isUser := auth.GetUserFromAuthCtx(ctx.FromRequest(request).AuthCtx); !isUser {
+				log.Warnf("encountered request analysis for unknown user, this shouldn't happen")
+				userId = "unknown-user-database-wipe"
+			} else {
+				userId = user.ID.String()
+			}
+
+			if err := s.DB.RequestCollectedGraphDataDeletion(request.Context(), userId); err != nil {
+				api.HandleDatabaseError(request, response, err)
+				return
+			}
+			s.handleAuditLogForDatabaseWipe(request.Context(), &auditEntry, true, "collected graph data")
 		}
+
 	}
 
 	// delete asset group selectors
 	if len(payload.DeleteAssetGroupSelectors) > 0 {
-		if failed := s.deleteHighValueSelectors(request.Context(), auditEntry, payload.DeleteAssetGroupSelectors); failed {
+		if failed := s.deleteHighValueSelectors(request.Context(), &auditEntry, payload.DeleteAssetGroupSelectors); failed {
 			errors = append(errors, "custom high value selectors")
 		} else {
 			kickoffAnalysis = true
@@ -115,24 +138,35 @@ func (s Resources) HandleDatabaseWipe(response http.ResponseWriter, request *htt
 
 	// if deleting `nodes` or deleting `asset group selectors` is successful, kickoff an analysis
 	if kickoffAnalysis {
-		s.TaskNotifier.RequestAnalysis()
+		var userId string
+		if user, isUser := auth.GetUserFromAuthCtx(ctx.FromRequest(request).AuthCtx); !isUser {
+			log.Warnf("encountered request analysis for unknown user, this shouldn't happen")
+			userId = "unknown-user-database-wipe"
+		} else {
+			userId = user.ID.String()
+		}
+
+		if err := s.DB.RequestAnalysis(request.Context(), userId); err != nil {
+			api.HandleDatabaseError(request, response, err)
+			return
+		}
 	}
 
 	// delete file ingest history
 	if payload.DeleteFileIngestHistory {
-		if failure := s.deleteFileIngestHistory(request.Context(), auditEntry); failure {
+		if failure := s.deleteFileIngestHistory(request.Context(), &auditEntry); failure {
 			errors = append(errors, "file ingest history")
 		}
 	}
 
 	// delete data quality history
 	if payload.DeleteDataQualityHistory {
-		if failure := s.deleteDataQualityHistory(request.Context(), auditEntry); failure {
+		if failure := s.deleteDataQualityHistory(request.Context(), &auditEntry); failure {
 			errors = append(errors, "data quality history")
 		}
 	}
 
-	// return a user friendly error message indicating what operations failed
+	// return a user-friendly error message indicating what operations failed
 	if len(errors) > 0 {
 		api.WriteErrorResponse(
 			request.Context(),
@@ -144,39 +178,6 @@ func (s Resources) HandleDatabaseWipe(response http.ResponseWriter, request *htt
 		response.WriteHeader(http.StatusNoContent)
 	}
 
-}
-
-func (s Resources) deleteCollectedGraphData(ctx context.Context, auditEntry *model.AuditEntry) (failure bool) {
-	var nodeIDs []graph.ID
-
-	if err := s.Graph.ReadTransaction(ctx,
-		func(tx graph.Transaction) error {
-			fetchedNodeIDs, err := ops.FetchNodeIDs(tx.Nodes())
-
-			nodeIDs = append(nodeIDs, fetchedNodeIDs...)
-			return err
-		},
-	); err != nil {
-		log.Errorf("%s: %s", "error fetching all nodes", err.Error())
-		s.handleAuditLogForDatabaseWipe(ctx, auditEntry, false, "collected graph data")
-		return true
-	} else if err := s.Graph.BatchOperation(ctx, func(batch graph.Batch) error {
-		for _, nodeId := range nodeIDs {
-			// deleting a node also deletes all of its edges due to a sql trigger
-			if err := batch.DeleteNode(nodeId); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		log.Errorf("%s: %s", "error deleting all nodes", err.Error())
-		s.handleAuditLogForDatabaseWipe(ctx, auditEntry, false, "collected graph data")
-		return true
-	} else {
-		// if successful, handle audit log and kick off analysis
-		s.handleAuditLogForDatabaseWipe(ctx, auditEntry, true, "collected graph data")
-		return false
-	}
 }
 
 func (s Resources) deleteHighValueSelectors(ctx context.Context, auditEntry *model.AuditEntry, assetGroupIDs []int) (failure bool) {
@@ -218,7 +219,7 @@ func (s Resources) handleAuditLogForDatabaseWipe(ctx context.Context, auditEntry
 	if success {
 		auditEntry.Status = model.AuditLogStatusSuccess
 		auditEntry.Model = model.AuditData{
-			"delete_successful": msg,
+			"delete_request_successful": msg,
 		}
 	} else {
 		auditEntry.Status = model.AuditLogStatusFailure

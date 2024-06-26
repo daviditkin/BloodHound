@@ -20,17 +20,8 @@ import (
 	"net/http"
 
 	"github.com/specterops/bloodhound/src/api"
-	"github.com/specterops/bloodhound/log"
 )
 
 func (s Resources) GetDatapipeStatus(response http.ResponseWriter, request *http.Request) {
 	api.WriteBasicResponse(request.Context(), s.TaskNotifier.GetStatus(), http.StatusOK, response)
-}
-
-func (s Resources) RequestAnalysis(response http.ResponseWriter, _ *http.Request) {
-	defer log.Measure(log.LevelDebug, "Requesting analysis")()
-
-	s.TaskNotifier.RequestAnalysis()
-
-	response.WriteHeader(http.StatusAccepted)
 }

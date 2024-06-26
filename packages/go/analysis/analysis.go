@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/specterops/bloodhound/dawgs/graph"
 	"github.com/specterops/bloodhound/dawgs/ops"
@@ -203,47 +202,10 @@ func ExpandGroupMembership(tx graph.Transaction, candidates graph.NodeSet) (grap
 	}
 }
 
-func GetLAPSSyncers(tx graph.Transaction, domain *graph.Node) ([]*graph.Node, error) {
+func GetDCSyncers(tx graph.Transaction, domain *graph.Node) ([]*graph.Node, error) {
 	var (
-		getChangesQuery         = fromEntityToEntityWithRelationshipKind(tx, domain, ad.GetChanges, false)
-		getChangesFilteredQuery = fromEntityToEntityWithRelationshipKind(tx, domain, ad.GetChangesInFilteredSet, false)
-	)
-
-	if getChangesNodes, err := ops.FetchStartNodes(getChangesQuery); err != nil {
-		return nil, err
-	} else if getChangesNodeMembers, err := ExpandGroupMembership(tx, getChangesNodes); err != nil {
-		return nil, err
-	} else if getChangesFilteredNodes, err := ops.FetchStartNodes(getChangesFilteredQuery); err != nil {
-		return nil, err
-	} else if getChangesFilteredNodeMembers, err := ExpandGroupMembership(tx, getChangesFilteredNodes); err != nil {
-		return nil, err
-	} else {
-		// Collect and filter the bitmap
-		getChangesNodes.AddSet(getChangesNodeMembers)
-		getChangesFilteredNodes.AddSet(getChangesFilteredNodeMembers)
-
-		syncerBitmap := graph.NodeSetToBitmap(getChangesNodes)
-		syncerBitmap.And(graph.NodeSetToBitmap(getChangesFilteredNodes))
-
-		var (
-			nodeIDs = syncerBitmap.ToArray()
-			nodes   = make([]*graph.Node, len(nodeIDs))
-		)
-
-		for idx, rawID := range syncerBitmap.ToArray() {
-			// Since the bitmap is an intersection of both node sets each set is guaranteed to have a valid reference
-			// to the node
-			nodes[idx] = getChangesNodes.Get(graph.ID(int64(rawID)))
-		}
-
-		return nodes, nil
-	}
-}
-
-func GetDCSyncers(tx graph.Transaction, domain *graph.Node, filterTierZero bool) ([]*graph.Node, error) {
-	var (
-		getChangesQuery    = fromEntityToEntityWithRelationshipKind(tx, domain, ad.GetChanges, filterTierZero)
-		getChangesAllQuery = fromEntityToEntityWithRelationshipKind(tx, domain, ad.GetChangesAll, filterTierZero)
+		getChangesQuery    = FromEntityToEntityWithRelationshipKind(tx, domain, ad.GetChanges)
+		getChangesAllQuery = FromEntityToEntityWithRelationshipKind(tx, domain, ad.GetChangesAll)
 	)
 
 	if getChangesNodes, err := ops.FetchStartNodes(getChangesQuery); err != nil {
@@ -258,33 +220,6 @@ func GetDCSyncers(tx graph.Transaction, domain *graph.Node, filterTierZero bool)
 		// Collect and filter the bitmap
 		getChangesNodes.AddSet(getChangesNodeMembers)
 		getChangesAllNodes.AddSet(getChangesAllNodeMembers)
-
-		if filterTierZero {
-			//Do a second pass to filter out T0 nodes that might have ended up through group membership
-			for _, node := range getChangesNodes {
-				if systemTags, err := node.Properties.Get(common.SystemTags.String()).String(); err != nil {
-					if graph.IsErrPropertyNotFound(err) {
-						continue
-					}
-
-					return nil, err
-				} else if strings.Contains(systemTags, ad.AdminTierZero) {
-					getChangesNodes.Remove(node.ID)
-				}
-			}
-
-			for _, node := range getChangesAllNodes {
-				if systemTags, err := node.Properties.Get(common.SystemTags.String()).String(); err != nil {
-					if graph.IsErrPropertyNotFound(err) {
-						continue
-					}
-
-					return nil, err
-				} else if strings.Contains(systemTags, ad.AdminTierZero) {
-					getChangesNodes.Remove(node.ID)
-				}
-			}
-		}
 
 		dcSyncerBitmap := graph.NodeSetToBitmap(getChangesNodes)
 		dcSyncerBitmap.And(graph.NodeSetToBitmap(getChangesAllNodes))
@@ -304,18 +239,12 @@ func GetDCSyncers(tx graph.Transaction, domain *graph.Node, filterTierZero bool)
 	}
 }
 
-func fromEntityToEntityWithRelationshipKind(tx graph.Transaction, target *graph.Node, relKind graph.Kind, filterTierZero bool) graph.RelationshipQuery {
+func FromEntityToEntityWithRelationshipKind(tx graph.Transaction, target *graph.Node, relKind graph.Kind) graph.RelationshipQuery {
 	return tx.Relationships().Filterf(func() graph.Criteria {
 		filters := []graph.Criteria{
 			query.Kind(query.Start(), ad.Entity),
 			query.Kind(query.Relationship(), relKind),
 			query.Equals(query.EndID(), target.ID),
-		}
-
-		if filterTierZero {
-			filters = append(filters, query.Not(
-				query.StringContains(query.StartProperty(common.SystemTags.String()), ad.AdminTierZero),
-			))
 		}
 
 		return query.And(filters...)

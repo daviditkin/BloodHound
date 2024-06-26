@@ -20,10 +20,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/specterops/bloodhound/dawgs/drivers"
-	"github.com/specterops/bloodhound/log"
 	"sort"
 	"strings"
+
+	"github.com/specterops/bloodhound/dawgs/drivers"
+	"github.com/specterops/bloodhound/log"
 
 	"github.com/specterops/bloodhound/dawgs/query/neo4j"
 	"github.com/specterops/bloodhound/dawgs/util/size"
@@ -46,14 +47,14 @@ type innerTransaction interface {
 }
 
 type neo4jTransaction struct {
-	cfg                  graph.TransactionConfig
-	ctx                  context.Context
-	session              neo4j_core.Session
-	innerTx              neo4j_core.Transaction
-	writes               int
-	writeFlushSize       int
-	batchWriteSize       int
-	traversalMemoryLimit size.Size
+	cfg                   graph.TransactionConfig
+	ctx                   context.Context
+	session               neo4j_core.Session
+	innerTx               neo4j_core.Transaction
+	writes                int
+	writeFlushSize        int
+	batchWriteSize        int
+	graphQueryMemoryLimit size.Size
 }
 
 func (s *neo4jTransaction) WithGraph(graphSchema graph.Graph) graph.Transaction {
@@ -128,18 +129,14 @@ func (s *neo4jTransaction) UpdateNodeBy(update graph.NodeUpdate) error {
 	return s.updateNodesBy(update)
 }
 
-func newTransaction(ctx context.Context, session neo4j_core.Session, cfg graph.TransactionConfig, writeFlushSize int, batchWriteSize int, traversalMemoryLimit size.Size) *neo4jTransaction {
-	if traversalMemoryLimit == 0 {
-		traversalMemoryLimit = 2 * size.Gibibyte
-	}
-
+func newTransaction(ctx context.Context, session neo4j_core.Session, cfg graph.TransactionConfig, writeFlushSize int, batchWriteSize int, graphQueryMemoryLimit size.Size) *neo4jTransaction {
 	return &neo4jTransaction{
-		cfg:                  cfg,
-		ctx:                  ctx,
-		session:              session,
-		writeFlushSize:       writeFlushSize,
-		batchWriteSize:       batchWriteSize,
-		traversalMemoryLimit: traversalMemoryLimit,
+		cfg:                   cfg,
+		ctx:                   ctx,
+		session:               session,
+		writeFlushSize:        writeFlushSize,
+		batchWriteSize:        batchWriteSize,
+		graphQueryMemoryLimit: graphQueryMemoryLimit,
 	}
 }
 
@@ -226,7 +223,8 @@ func (s *neo4jTransaction) updateNode(updatedNode *graph.Node) error {
 	if err := queryBuilder.Prepare(); err != nil {
 		return err
 	} else if cypherQuery, err := queryBuilder.Render(); err != nil {
-		return graph.NewError(cypherQuery, err)
+		strippedQuery := stripCypherQuery(cypherQuery)
+		return graph.NewError(strippedQuery, err)
 	} else if result := s.Raw(cypherQuery, queryBuilder.Parameters); result.Error() != nil {
 		return result.Error()
 	}
@@ -454,12 +452,13 @@ func (s *neo4jTransaction) UpdateRelationship(relationship *graph.Relationship) 
 	if err := queryBuilder.Prepare(); err != nil {
 		return err
 	} else if cypherQuery, err := queryBuilder.Render(); err != nil {
-		return graph.NewError(cypherQuery, err)
+		strippedQuery := stripCypherQuery(cypherQuery)
+		return graph.NewError(strippedQuery, err)
 	} else {
 		return s.runAndLog(cypherQuery, queryBuilder.Parameters, 1).Error()
 	}
 }
 
-func (s *neo4jTransaction) TraversalMemoryLimit() size.Size {
-	return s.traversalMemoryLimit
+func (s *neo4jTransaction) GraphQueryMemoryLimit() size.Size {
+	return s.graphQueryMemoryLimit
 }

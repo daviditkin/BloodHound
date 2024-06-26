@@ -14,8 +14,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-version: '3'
-
 services:
   proxy:
     image: docker.io/library/traefik:latest
@@ -71,6 +69,8 @@ services:
 
   graph-db:
     build:
+      args:
+        memconfig: true
       context: tools/docker-compose
       dockerfile: neo4j.Dockerfile
     environment:

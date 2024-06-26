@@ -89,7 +89,7 @@ func NewAuthenticator(cfg config.Configuration, db database.Database, ctxInitial
 	}
 }
 
-func (s authenticator) auditLogin(requestContext context.Context, commitID uuid.UUID, user model.User, loginRequest LoginRequest, status string, loginError error) {
+func (s authenticator) auditLogin(requestContext context.Context, commitID uuid.UUID, user model.User, loginRequest LoginRequest, status model.AuditLogEntryStatus, loginError error) {
 	bhCtx := ctx.Get(requestContext)
 	auditLog := model.AuditLog{
 		Action:          model.AuditLogActionLoginAttempt,
@@ -106,7 +106,7 @@ func (s authenticator) auditLogin(requestContext context.Context, commitID uuid.
 		auditLog.ActorEmail = user.EmailAddress.ValueOrZero()
 	}
 
-	if status == string(model.AuditLogStatusFailure) {
+	if status == model.AuditLogStatusFailure {
 		auditLog.Fields["error"] = loginError
 	}
 
@@ -143,19 +143,19 @@ func (s authenticator) LoginWithSecret(ctx context.Context, loginRequest LoginRe
 
 	commitID, err = uuid.NewV4()
 	if err != nil {
-		log.Errorf("error generating commit ID for login: %s", err)
+		log.Errorf("Error generating commit ID for login: %s", err)
 		return LoginDetails{}, err
 	}
 
-	s.auditLogin(ctx, commitID, user, loginRequest, string(model.AuditLogStatusIntent), err)
+	s.auditLogin(ctx, commitID, user, loginRequest, model.AuditLogStatusIntent, err)
 
 	user, sessionToken, err = s.validateSecretLogin(ctx, loginRequest)
 
 	if err != nil {
-		s.auditLogin(ctx, commitID, user, loginRequest, string(model.AuditLogStatusFailure), err)
+		s.auditLogin(ctx, commitID, user, loginRequest, model.AuditLogStatusFailure, err)
 		return LoginDetails{}, err
 	} else {
-		s.auditLogin(ctx, commitID, user, loginRequest, string(model.AuditLogStatusSuccess), err)
+		s.auditLogin(ctx, commitID, user, loginRequest, model.AuditLogStatusSuccess, err)
 		return LoginDetails{
 			User:         user,
 			SessionToken: sessionToken,
@@ -269,7 +269,7 @@ func (s authenticator) ValidateRequestSignature(tokenID uuid.UUID, request *http
 			}
 		}
 
-		if digestNow, err := NewRequestSignature(sha256.New, authToken.Key, requestDate.Format(time.RFC3339), request.Method, request.RequestURI, teeReader); err != nil {
+		if digestNow, err := NewRequestSignature(request.Context(), sha256.New, authToken.Key, requestDate.Format(time.RFC3339), request.Method, request.RequestURI, teeReader); err != nil {
 			if readCloser != nil {
 				readCloser.Close()
 			}
@@ -352,7 +352,7 @@ func (s authenticator) ValidateSession(ctx context.Context, jwtTokenString strin
 	claims := auth.SessionData{}
 
 	if token, err := jwt.ParseWithClaims(jwtTokenString, &claims, s.jwtSigningKey); err != nil {
-		if err == jwt.ErrSignatureInvalid {
+		if errors.Is(err, jwt.ErrSignatureInvalid) {
 			return auth.Context{}, ErrInvalidAuth
 		}
 
@@ -375,7 +375,10 @@ func (s authenticator) ValidateSession(ctx context.Context, jwtTokenString strin
 			Session: session,
 		}
 
-		if session.AuthProviderType == model.SessionAuthProviderSecret && session.User.AuthSecret.Expired() {
+		if session.AuthProviderType == model.SessionAuthProviderSecret && session.User.AuthSecret == nil {
+			log.Infof("No auth secret found for user ID %s", session.UserID.String())
+			return auth.Context{}, ErrNoUserSecret
+		} else if session.AuthProviderType == model.SessionAuthProviderSecret && session.User.AuthSecret.Expired() {
 			var (
 				authManageSelfPermission = auth.Permissions().AuthManageSelf
 				permissions              model.Permissions
@@ -389,6 +392,7 @@ func (s authenticator) ValidateSession(ctx context.Context, jwtTokenString strin
 				Enabled:     true,
 				Permissions: permissions,
 			}
+
 			// EULA Acceptance does not pertain to Bloodhound Community Edition; this flag is used for Bloodhound Enterprise users.
 			// This value is automatically set to true for Bloodhound Community Edition in the patchEULAAcceptance and CreateUser functions.
 		} else if !session.User.EULAAccepted {

@@ -21,13 +21,16 @@ package ad_test
 
 import (
 	"context"
+	"testing"
+
 	schema "github.com/specterops/bloodhound/graphschema"
 	"github.com/specterops/bloodhound/src/test"
-	"testing"
 
 	"github.com/specterops/bloodhound/analysis"
 	adAnalysis "github.com/specterops/bloodhound/analysis/ad"
 	"github.com/specterops/bloodhound/dawgs/graph"
+	"github.com/specterops/bloodhound/dawgs/ops"
+	"github.com/specterops/bloodhound/dawgs/query"
 	"github.com/specterops/bloodhound/graphschema/ad"
 	"github.com/specterops/bloodhound/graphschema/common"
 	"github.com/specterops/bloodhound/src/test/integration"
@@ -842,12 +845,11 @@ func TestCreateDomainTrustListDelegate(t *testing.T) {
 func TestGetDCSyncers(t *testing.T) {
 	testContext := integration.NewGraphTestContext(t, schema.DefaultGraphSchema())
 
-	// XXX: Why does this need a WriteTransaction to run?
-	testContext.WriteTransactionTestWithSetup(func(harness *integration.HarnessDetails) error {
+	testContext.ReadTransactionTestWithSetup(func(harness *integration.HarnessDetails) error {
 		harness.TrustDCSync.Setup(testContext)
 		return nil
 	}, func(harness integration.HarnessDetails, tx graph.Transaction) {
-		dcSyncers, err := analysis.GetDCSyncers(tx, harness.TrustDCSync.DomainA, true)
+		dcSyncers, err := analysis.GetDCSyncers(tx, harness.TrustDCSync.DomainA)
 
 		test.RequireNilErr(t, err)
 		require.Equal(t, 2, len(dcSyncers))
@@ -858,18 +860,19 @@ func TestGetDCSyncers(t *testing.T) {
 		require.Contains(t, ids, harness.TrustDCSync.UserA.ID)
 		require.Contains(t, ids, harness.TrustDCSync.UserB.ID)
 
+		// Verify T0 users are included
 		harness.TrustDCSync.UserA.Properties.Set(common.SystemTags.String(), ad.AdminTierZero)
 		tx.UpdateNode(harness.TrustDCSync.UserA)
 
-		dcSyncers, err = analysis.GetDCSyncers(tx, harness.TrustDCSync.DomainA, true)
+		dcSyncers, err = analysis.GetDCSyncers(tx, harness.TrustDCSync.DomainA)
 
 		test.RequireNilErr(t, err)
-		require.Equal(t, 1, len(dcSyncers))
+		require.Equal(t, 2, len(dcSyncers))
 		ids = make([]graph.ID, len(dcSyncers))
 		for _, node := range dcSyncers {
 			ids = append(ids, node.ID)
 		}
-		require.NotContains(t, ids, harness.TrustDCSync.UserA.ID)
+		require.Contains(t, ids, harness.TrustDCSync.UserA.ID)
 		require.Contains(t, ids, harness.TrustDCSync.UserB.ID)
 	})
 }
@@ -1084,5 +1087,36 @@ func TestFetchUserSessionCompleteness(t *testing.T) {
 
 		test.RequireNilErr(t, err)
 		require.Equal(t, .5, completeness)
+	})
+}
+
+func TestSyncLAPSPassword(t *testing.T) {
+	testContext := integration.NewGraphTestContext(t, schema.DefaultGraphSchema())
+
+	testContext.DatabaseTestWithSetup(func(harness *integration.HarnessDetails) error {
+		harness.SyncLAPSPasswordHarness.Setup(testContext)
+		return nil
+	}, func(harness integration.HarnessDetails, db graph.Database) {
+		if groupExpansions, err := adAnalysis.ExpandAllRDPLocalGroups(testContext.Context(), db); err != nil {
+			t.Fatalf("error expanding groups in integration test; %v", err)
+		} else if _, err := adAnalysis.PostSyncLAPSPassword(testContext.Context(), db, groupExpansions); err != nil {
+			t.Fatalf("error creating SyncLAPSPassword edges in integration test; %v", err)
+		} else {
+			db.ReadTransaction(context.Background(), func(tx graph.Transaction) error {
+				if results, err := ops.FetchStartNodes(tx.Relationships().Filterf(func() graph.Criteria {
+					return query.Kind(query.Relationship(), ad.SyncLAPSPassword)
+				})); err != nil {
+					t.Fatalf("error fetching SyncLAPSPassword edges in integration test; %v", err)
+				} else {
+					require.Equal(t, 4, len(results))
+
+					require.True(t, results.Contains(harness.SyncLAPSPasswordHarness.Group1))
+					require.True(t, results.Contains(harness.SyncLAPSPasswordHarness.Group4))
+					require.True(t, results.Contains(harness.SyncLAPSPasswordHarness.User3))
+					require.True(t, results.Contains(harness.SyncLAPSPasswordHarness.User5))
+				}
+				return nil
+			})
+		}
 	})
 }

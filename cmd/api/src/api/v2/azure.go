@@ -316,7 +316,7 @@ func (s *Resources) GetAZRelatedEntities(ctx context.Context, response http.Resp
 				api.WriteErrorResponse(ctx, api.BuildErrorResponse(http.StatusBadRequest, fmt.Sprintf(utils.ErrorInvalidSkip, skip), request), response)
 			} else if errors.Is(err, errParameterRelatedEntityType) {
 				api.WriteErrorResponse(ctx, api.BuildErrorResponse(http.StatusNotFound, fmt.Sprintf("no matching related entity list type for %s", relatedEntityType), request), response)
-			} else if errors.Is(err, ops.ErrTraversalMemoryLimit) {
+			} else if errors.Is(err, ops.ErrGraphQueryMemoryLimit) {
 				api.WriteErrorResponse(ctx, api.BuildErrorResponse(http.StatusInternalServerError, "calculating the request results exceeded memory limitations due to the volume of objects involved", request), response)
 			} else {
 				api.WriteErrorResponse(ctx, api.BuildErrorResponse(http.StatusInternalServerError, "an unknown error occurred during the request", request), response)

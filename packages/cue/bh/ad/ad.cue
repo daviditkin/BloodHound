@@ -98,6 +98,20 @@ IsUserSpecifiesSanEnabledCollected: types.#StringEnum & {
 	representation: "isuserspecifiessanenabledcollected"
 }
 
+RoleSeparationEnabled: types.#StringEnum & {
+	symbol: 		"RoleSeparationEnabled"
+	schema: 		"ad"
+	name:           "Role Separation Enabled"
+	representation: "roleseparationenabled"
+}
+
+RoleSeparationEnabledCollected: types.#StringEnum & {
+	symbol: 		"RoleSeparationEnabledCollected"
+	schema: 		"ad"
+	name:           "Role Separation Enabled Collected"
+	representation: "roleseparationenabledcollected"
+}
+
 HasBasicConstraints: types.#StringEnum & {
 	symbol: 		"HasBasicConstraints"
 	schema: 		"ad"
@@ -110,6 +124,13 @@ BasicConstraintPathLength: types.#StringEnum & {
 	schema: 		"ad"
 	name:           "Basic Constraint Path Length"
 	representation: "basicconstraintpathlength"
+}
+
+UnresolvedPublishedTemplates: types.#StringEnum & {
+	symbol: 		"UnresolvedPublishedTemplates"
+	schema: 		"ad"
+	name:           "Unresolved Published Certificate Templates"
+	representation: "unresolvedpublishedtemplates"
 }
 
 DNSHostname: types.#StringEnum & {
@@ -423,14 +444,14 @@ AuthorizedSignatures: types.#StringEnum & {
 ApplicationPolicies: types.#StringEnum & {
 	symbol: "ApplicationPolicies"
 	schema: "ad"
-	name: "Application Policies"
+	name: "Application Policies Required"
 	representation: "applicationpolicies"
 }
 
 IssuancePolicies: types.#StringEnum & {
 	symbol: "IssuancePolicies"
 	schema: "ad"
-	name: "Issuance Policies"
+	name: "Issuance Policies Required"
 	representation: "issuancepolicies"
 }
 
@@ -465,7 +486,7 @@ EnrolleeSuppliesSubject: types.#StringEnum & {
 CertificateApplicationPolicy: types.#StringEnum & {
 	symbol: "CertificateApplicationPolicy"
 	schema: "ad"
-	name: "Certificate Application Policies"
+	name: "Application Policy Extensions"
 	representation: "certificateapplicationpolicy"
 }
 
@@ -525,6 +546,34 @@ OID: types.#StringEnum & {
 	representation: "oid"
 }
 
+CertificatePolicy: types.#StringEnum & {
+	symbol: "CertificatePolicy"
+	schema: "ad"
+	name: "Issuance Policy Extensions"
+	representation: "certificatepolicy"
+}
+
+CertTemplateOID: types.#StringEnum & {
+	symbol: "CertTemplateOID"
+	schema: "ad"
+	name: "Certificate Template OID"
+	representation: "certtemplateoid"
+}
+
+GroupLinkID: types.#StringEnum & {
+	symbol: "GroupLinkID"
+	schema: "ad"
+	name: "Group Link ID"
+	representation: "grouplinkid"
+}
+
+ObjectGUID: types.#StringEnum & {
+	symbol: "ObjectGUID"
+	schema: "ad"
+	name: "Object GUID"
+	representation: "objectguid"
+}
+
 Properties: [
 	AdminCount,
 	CASecurityCollected,
@@ -537,8 +586,11 @@ Properties: [
 	EnrollmentAgentRestrictionsCollected,
 	IsUserSpecifiesSanEnabled,
 	IsUserSpecifiesSanEnabledCollected,
+	RoleSeparationEnabled,
+	RoleSeparationEnabledCollected,
 	HasBasicConstraints,
 	BasicConstraintPathLength,
+	UnresolvedPublishedTemplates,
 	DNSHostname,
 	CrossCertificatePair,
 	DistinguishedName,
@@ -596,7 +648,11 @@ Properties: [
 	RenewalPeriod,
 	ValidityPeriod,
 	OID,
-	HomeDirectory
+	HomeDirectory,
+	CertificatePolicy,
+	CertTemplateOID,
+	GroupLinkID,
+	ObjectGUID
 ]
 
 // Kinds
@@ -678,6 +734,11 @@ CertTemplate: types.#Kind & {
 	schema: "active_directory"
 }
 
+IssuancePolicy: types.#Kind & {
+	symbol: "IssuancePolicy"
+	schema: "active_directory"
+}
+
 NodeKinds: [
 	Entity,
 	User,
@@ -693,7 +754,8 @@ NodeKinds: [
 	RootCA,
 	EnterpriseCA,
 	NTAuthStore,
-	CertTemplate
+	CertTemplate,
+	IssuancePolicy
 ]
 
 Owns: types.#Kind & {
@@ -972,6 +1034,21 @@ EnrollOnBehalfOf: types.#Kind & {
 	schema: "active_directory"
 }
 
+OIDGroupLink: types.#Kind & {
+	symbol: "OIDGroupLink"
+	schema: "active_directory"
+}
+
+ExtendedByPolicy: types.#Kind & {
+	symbol: "ExtendedByPolicy"
+	schema: "active_directory"
+}
+
+ExtendedByPolicy: types.#Kind & {
+	symbol: "ExtendedByPolicy"
+	schema: "active_directory"
+}
+
 ADCSESC1: types.#Kind & {
 	symbol: "ADCSESC1"
 	schema: "active_directory"
@@ -1089,6 +1166,8 @@ RelationshipKinds: [
 	IssuedSignedBy,
 	GoldenCert,
 	EnrollOnBehalfOf,
+	OIDGroupLink,
+	ExtendedByPolicy,
 	ADCSESC1,
 	ADCSESC3,
 	ADCSESC4,
@@ -1192,4 +1271,5 @@ EdgeCompositionRelationships: [
 	ADCSESC9b,
 	ADCSESC10a,
 	ADCSESC10b,
+	ADCSESC13
 ]

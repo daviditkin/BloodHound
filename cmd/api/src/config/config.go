@@ -140,35 +140,35 @@ type DefaultAdminConfiguration struct {
 }
 
 type Configuration struct {
-	Version                 int                       `json:"version"`
-	BindAddress             string                    `json:"bind_addr"`
-	NetTimeoutSeconds       int                       `json:"net_timeout_seconds"`
-	SlowQueryThreshold      int64                     `json:"slow_query_threshold"`
-	MaxGraphQueryCacheSize  int                       `json:"max_graphdb_cache_size"`
-	MaxAPICacheSize         int                       `json:"max_api_cache_size"`
-	MetricsPort             string                    `json:"metrics_port"`
-	RootURL                 serde.URL                 `json:"root_url"`
-	WorkDir                 string                    `json:"work_dir"`
-	LogLevel                string                    `json:"log_level"`
-	LogPath                 string                    `json:"log_path"`
-	TLS                     TLSConfiguration          `json:"tls"`
-	GraphDriver             string                    `json:"graph_driver"`
-	Database                DatabaseConfiguration     `json:"database"`
-	Neo4J                   DatabaseConfiguration     `json:"neo4j"`
-	Crypto                  CryptoConfiguration       `json:"crypto"`
-	SAML                    SAMLConfiguration         `json:"saml"`
-	SpecterAuth             SpecterAuthConfiguration  `json:"specter_auth"`
-	DefaultAdmin            DefaultAdminConfiguration `json:"default_admin"`
-	CollectorsBasePath      string                    `json:"collectors_base_path"`
-	DatapipeInterval        int                       `json:"datapipe_interval"`
-	EnableStartupWaitPeriod bool                      `json:"enable_startup_wait_period"`
-	EnableAPILogging        bool                      `json:"enable_api_logging"`
-	DisableAnalysis         bool                      `json:"disable_analysis"`
-	DisableCypherQC         bool                      `json:"disable_cypher_qc"`
-	DisableIngest           bool                      `json:"disable_ingest"`
-	DisableMigrations       bool                      `json:"disable_migrations"`
-	TraversalMemoryLimit    uint16                    `json:"traversal_memory_limit"`
-	AuthSessionTTLHours     int                       `json:"auth_session_ttl_hours"`
+	Version                      int                       `json:"version"`
+	BindAddress                  string                    `json:"bind_addr"`
+	SlowQueryThreshold           int64                     `json:"slow_query_threshold"`
+	MaxGraphQueryCacheSize       int                       `json:"max_graphdb_cache_size"`
+	MaxAPICacheSize              int                       `json:"max_api_cache_size"`
+	MetricsPort                  string                    `json:"metrics_port"`
+	RootURL                      serde.URL                 `json:"root_url"`
+	WorkDir                      string                    `json:"work_dir"`
+	LogLevel                     string                    `json:"log_level"`
+	LogPath                      string                    `json:"log_path"`
+	TLS                          TLSConfiguration          `json:"tls"`
+	GraphDriver                  string                    `json:"graph_driver"`
+	Database                     DatabaseConfiguration     `json:"database"`
+	Neo4J                        DatabaseConfiguration     `json:"neo4j"`
+	Crypto                       CryptoConfiguration       `json:"crypto"`
+	SAML                         SAMLConfiguration         `json:"saml"`
+	SpecterAuth                  SpecterAuthConfiguration  `json:"specter_auth"`
+	DefaultAdmin                 DefaultAdminConfiguration `json:"default_admin"`
+	CollectorsBasePath           string                    `json:"collectors_base_path"`
+	DatapipeInterval             int                       `json:"datapipe_interval"`
+	EnableStartupWaitPeriod      bool                      `json:"enable_startup_wait_period"`
+	EnableAPILogging             bool                      `json:"enable_api_logging"`
+	EnableCypherMutations        bool                      `json:"enable_cypher_mutations"`
+	DisableAnalysis              bool                      `json:"disable_analysis"`
+	DisableCypherComplexityLimit bool                      `json:"disable_cypher_complexity_limit"`
+	DisableIngest                bool                      `json:"disable_ingest"`
+	DisableMigrations            bool                      `json:"disable_migrations"`
+	GraphQueryMemoryLimit        uint16                    `json:"graph_query_memory_limit"`
+	AuthSessionTTLHours          int                       `json:"auth_session_ttl_hours"`
 }
 
 func (s Configuration) AuthSessionTTL() time.Duration {
@@ -297,13 +297,13 @@ func (s Configuration) SaveCollectorManifests() (CollectorManifests, error) {
 	manifests := CollectorManifests{}
 
 	if azureHoundManifest, err := generateCollectorManifest(filepath.Join(s.CollectorsDirectory(), azureHoundCollector)); err != nil {
-		log.Errorf("error generating AzureHound manifest file: %s", err)
+		log.Errorf("Error generating AzureHound manifest file: %s", err)
 	} else {
 		manifests[azureHoundCollector] = azureHoundManifest
 	}
 
 	if sharpHoundManifest, err := generateCollectorManifest(filepath.Join(s.CollectorsDirectory(), sharpHoundCollector)); err != nil {
-		log.Errorf("error generating SharpHound manifest file: %s", err)
+		log.Errorf("Error generating SharpHound manifest file: %s", err)
 	} else {
 		manifests[sharpHoundCollector] = sharpHoundManifest
 	}

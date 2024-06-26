@@ -137,8 +137,9 @@ export interface UpdateAzureHoundEventRequest {
 }
 
 export interface PutUserAuthSecretRequest {
+    currentSecret?: string;
     secret: string;
-    needs_password_reset: boolean;
+    needsPasswordReset: boolean;
 }
 
 export interface LoginRequest {
@@ -259,4 +260,14 @@ export interface ClearDatabaseRequest {
     deleteFileIngestHistory: boolean;
     deleteDataQualityHistory: boolean;
     deleteAssetGroupSelectors: number[];
+}
+
+export interface UpdateUserRequest {
+    firstName: string;
+    lastName: string;
+    emailAddress: string;
+    principal: string;
+    roles: number[];
+    SAMLProviderId?: string;
+    is_disabled?: boolean;
 }

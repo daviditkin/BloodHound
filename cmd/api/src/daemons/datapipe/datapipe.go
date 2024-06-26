@@ -20,7 +20,6 @@ package datapipe
 import (
 	"context"
 	"errors"
-	"sync/atomic"
 	"time"
 
 	"github.com/specterops/bloodhound/cache"
@@ -39,7 +38,6 @@ const (
 )
 
 type Tasker interface {
-	RequestAnalysis()
 	GetStatus() model.DatapipeStatusWrapper
 }
 
@@ -48,7 +46,6 @@ type Daemon struct {
 	graphdb             graph.Database
 	cache               cache.Cache
 	cfg                 config.Configuration
-	analysisRequested   *atomic.Bool
 	tickInterval        time.Duration
 	status              model.DatapipeStatusWrapper
 	ctx                 context.Context
@@ -66,7 +63,6 @@ func NewDaemon(ctx context.Context, cfg config.Configuration, connections bootst
 		cache:               cache,
 		cfg:                 cfg,
 		ctx:                 ctx,
-		analysisRequested:   &atomic.Bool{},
 		orphanedFileSweeper: NewOrphanFileSweeper(NewOSFileOperations(), cfg.TempDirectory()),
 		tickInterval:        tickInterval,
 		status: model.DatapipeStatusWrapper{
@@ -76,26 +72,17 @@ func NewDaemon(ctx context.Context, cfg config.Configuration, connections bootst
 	}
 }
 
-func (s *Daemon) RequestAnalysis() {
-	s.setAnalysisRequested(true)
-}
-
 func (s *Daemon) GetStatus() model.DatapipeStatusWrapper {
 	return s.status
 }
 
-func (s *Daemon) getAnalysisRequested() bool {
-	return s.analysisRequested.Load()
-}
-
-func (s *Daemon) setAnalysisRequested(requested bool) {
-	s.analysisRequested.Store(requested)
-}
-
 func (s *Daemon) analyze() {
-	// Ensure that the user-requested analysis switch is flipped back to false. This is done at the beginning of the
+	// Ensure that the user-requested analysis switch is deleted. This is done at the beginning of the
 	// function so that any re-analysis requests are caught while analysis is in-progress.
-	s.setAnalysisRequested(false)
+	if err := s.db.DeleteAnalysisRequest(s.ctx); err != nil {
+		log.Errorf("Error deleting analysis request: %v", err)
+		return
+	}
 
 	if s.cfg.DisableAnalysis {
 		return
@@ -158,6 +145,10 @@ func (s *Daemon) Start(ctx context.Context) {
 			s.clearOrphanedData()
 
 		case <-datapipeLoopTimer.C:
+			if s.db.HasCollectedGraphDataDeletionRequest(s.ctx) {
+				s.deleteData()
+			}
+
 			// Ingest all available ingest tasks
 			s.ingestAvailableTasks()
 
@@ -170,7 +161,7 @@ func (s *Daemon) Start(ctx context.Context) {
 			// If there are completed file upload jobs or if analysis was user-requested, perform analysis.
 			if hasJobsWaitingForAnalysis, err := HasFileUploadJobsWaitingForAnalysis(s.ctx, s.db); err != nil {
 				log.Errorf("Failed looking up jobs waiting for analysis: %v", err)
-			} else if hasJobsWaitingForAnalysis || s.getAnalysisRequested() {
+			} else if hasJobsWaitingForAnalysis || s.db.HasAnalysisRequest(s.ctx) {
 				s.analyze()
 			}
 
@@ -179,6 +170,25 @@ func (s *Daemon) Start(ctx context.Context) {
 		case <-s.ctx.Done():
 			return
 		}
+	}
+}
+
+func (s *Daemon) deleteData() {
+	defer func() {
+		s.status.Update(model.DatapipeStatusIdle, false)
+		_ = s.db.DeleteAnalysisRequest(s.ctx)
+		_ = s.db.RequestAnalysis(s.ctx, "datapie")
+	}()
+	defer log.Measure(log.LevelInfo, "Purge Graph Data Completed")()
+	s.status.Update(model.DatapipeStatusPurging, false)
+	log.Infof("Begin Purge Graph Data")
+
+	if err := s.db.CancelAllFileUploads(s.ctx); err != nil {
+		log.Errorf("Error cancelling jobs during data deletion: %v", err)
+	} else if err := s.db.DeleteAllIngestTasks(s.ctx); err != nil {
+		log.Errorf("Error deleting ingest tasks during data deletion: %v", err)
+	} else if err := DeleteCollectedGraphData(s.ctx, s.graphdb); err != nil {
+		log.Errorf("Error deleting graph data: %v", err)
 	}
 }
 

@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-version: '3'
 services:
   testdb:
     restart: unless-stopped
@@ -31,7 +30,9 @@ services:
 
   testgraph:
     restart: unless-stopped
-    image: neo4j:4.4.0
+    build:
+      context: tools/docker-compose
+      dockerfile: neo4j.Dockerfile
     environment:
       - NEO4J_AUTH=neo4j/bloodhoundcommunityedition
       - NEO4J_dbms_security_auth__enabled=false

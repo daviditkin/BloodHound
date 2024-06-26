@@ -15,23 +15,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import axios, { AxiosInstance } from 'axios';
-import * as types from './types';
 import {
-    BasicResponse,
-    CreateAuthTokenResponse,
-    ListAuthTokensResponse,
+    ActiveDirectoryDataQualityResponse,
+    AssetGroupMemberCountsResponse,
     AssetGroupMembersResponse,
     AssetGroupResponse,
+    AzureDataQualityResponse,
+    BasicResponse,
+    CreateAuthTokenResponse,
+    EndFileIngestResponse,
+    ListAuthTokensResponse,
+    ListFileIngestJobsResponse,
+    ListFileTypesForIngestResponse,
     PaginatedResponse,
     PostureResponse,
     SavedQuery,
-    AssetGroupMemberCountsResponse,
     StartFileIngestResponse,
-    ListFileTypesForIngestResponse,
-    ListFileIngestJobsResponse,
     UploadFileToIngestResponse,
-    EndFileIngestResponse,
 } from './responses';
+import * as types from './types';
 
 class BHEAPIClient {
     baseClient: AxiosInstance;
@@ -68,7 +70,7 @@ class BHEAPIClient {
         );
     };
 
-    cypherSearch = (query: string, includeProperties?: boolean, options?: types.RequestOptions) => {
+    cypherSearch = (query: string, options?: types.RequestOptions, includeProperties?: boolean) => {
         return this.baseClient.post('/api/v2/graphs/cypher', { query, include_properties: includeProperties }, options);
     };
 
@@ -186,7 +188,7 @@ class BHEAPIClient {
         sort_by?: string,
         options?: types.RequestOptions
     ) => {
-        return this.baseClient.get(
+        return this.baseClient.get<ActiveDirectoryDataQualityResponse>(
             `/api/v2/ad-domains/${domainId}/data-quality-stats`,
             Object.assign(
                 {
@@ -210,7 +212,7 @@ class BHEAPIClient {
         sort_by?: string,
         options?: types.RequestOptions
     ) => {
-        return this.baseClient.get(
+        return this.baseClient.get<AzureDataQualityResponse>(
             `/api/v2/azure-tenants/${tenantId}/data-quality-stats`,
             Object.assign(
                 {
@@ -407,7 +409,14 @@ class BHEAPIClient {
     createEvent = (
         event: types.CreateSharpHoundEventRequest | types.CreateAzureHoundEventRequest,
         options?: types.RequestOptions
-    ) => this.baseClient.post('/api/v2/events', event, options);
+    ) =>
+        this.baseClient.post('/api/v2/events', event, {
+            params: {
+                hydrate_ous: false,
+                hydrate_domains: false,
+            },
+            ...options,
+        });
 
     updateEvent = (
         eventId: string,
@@ -708,19 +717,7 @@ class BHEAPIClient {
             options
         );
 
-    updateUser = (
-        userId: string,
-        user: {
-            firstName: string;
-            lastName: string;
-            emailAddress: string;
-            principal: string;
-            roles: number[];
-            SAMLProviderId?: string;
-            is_disabled?: boolean;
-        },
-        options?: types.RequestOptions
-    ) =>
+    updateUser = (userId: string, user: types.UpdateUserRequest, options?: types.RequestOptions) =>
         this.baseClient.patch(
             `/api/v2/bloodhound-users/${userId}`,
             {
@@ -741,8 +738,16 @@ class BHEAPIClient {
     expireUserAuthSecret = (userId: string, options?: types.RequestOptions) =>
         this.baseClient.delete(`/api/v2/bloodhound-users/${userId}/secret`, options);
 
-    putUserAuthSecret = (userId: string, userSecret: types.PutUserAuthSecretRequest, options?: types.RequestOptions) =>
-        this.baseClient.put(`/api/v2/bloodhound-users/${userId}/secret`, userSecret, options);
+    putUserAuthSecret = (userId: string, payload: types.PutUserAuthSecretRequest, options?: types.RequestOptions) =>
+        this.baseClient.put(
+            `/api/v2/bloodhound-users/${userId}/secret`,
+            {
+                current_secret: payload.currentSecret,
+                needs_password_reset: payload.needsPasswordReset,
+                secret: payload.secret,
+            },
+            options
+        );
 
     enrollMFA = (userId: string, data: { secret: string }, options?: types.RequestOptions) =>
         this.baseClient.post(`/api/v2/bloodhound-users/${userId}/mfa`, data, options);
@@ -766,6 +771,14 @@ class BHEAPIClient {
         this.baseClient.post(`/api/v2/bloodhound-users/${userId}/mfa-activation`, data, options);
 
     acceptEULA = (options?: types.RequestOptions) => this.baseClient.put('/api/v2/accept-eula', options);
+
+    acceptFedRAMPEULA = (options?: types.RequestOptions) => this.baseClient.put('/api/v2/fed-eula/accept', options);
+
+    getFedRAMPEULAStatus = (options?: types.RequestOptions) =>
+        this.baseClient.get<{ data: { accepted: boolean } }>('/api/v2/fed-eula/status', options);
+
+    getFedRAMPEULAText = (options?: types.RequestOptions) =>
+        this.baseClient.get<{ data: string }>('/api/v2/fed-eula/text', options);
 
     getFeatureFlags = (options?: types.RequestOptions) => this.baseClient.get('/api/v2/features', options);
 
@@ -2207,6 +2220,61 @@ class BHEAPIClient {
             )
         );
 
+    getIssuancePolicyV2 = (id: string, counts?: boolean, options?: types.RequestOptions) =>
+        this.baseClient.get(
+            `/api/v2/issuancepolicies/${id}`,
+            Object.assign(
+                {
+                    params: {
+                        counts,
+                    },
+                },
+                options
+            )
+        );
+
+    getIssuancePolicyControllersV2 = (
+        id: string,
+        skip?: number,
+        limit?: number,
+        type?: string,
+        options?: types.RequestOptions
+    ) =>
+        this.baseClient.get(
+            `/api/v2/issuancepolicies/${id}/controllers`,
+            Object.assign(
+                {
+                    params: {
+                        skip,
+                        limit,
+                        type,
+                    },
+                },
+                options
+            )
+        );
+
+    getIssuancePolicyLinkedTemplatesV2 = (
+        id: string,
+        skip?: number,
+        limit?: number,
+        type?: string,
+        options?: types.RequestOptions
+    ) =>
+        this.baseClient.get(
+            `/api/v2/issuancepolicies/${id}/linkedtemplates`,
+            Object.assign(
+                {
+                    params: {
+                        skip,
+                        limit,
+                        type,
+                    },
+                },
+                options
+            )
+        );
+
     getMetaV2 = (id: string, options?: types.RequestOptions) => this.baseClient.get(`/api/v2/meta/${id}`, options);
 
     getShortestPathV2 = (
@@ -2243,6 +2311,10 @@ class BHEAPIClient {
                 options
             )
         );
+
+    /* remote assets */
+    getRemoteAsset = (assetPath: string, options?: types.RequestOptions) =>
+        this.baseClient.get(`/api/v2/assets/${assetPath}`, options);
 }
 
 export default BHEAPIClient;

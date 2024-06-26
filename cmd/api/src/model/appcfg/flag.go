@@ -30,7 +30,9 @@ const (
 	FeatureReconciliation             = "reconciliation"
 	FeatureEntityPanelCaching         = "entity_panel_cache"
 	FeatureAdcs                       = "adcs"
+	FeatureClearGraphData             = "clear_graph_data"
 	FeatureRiskExposureNewCalculation = "risk_exposure_new_calculation"
+	FeatureFedRAMPEULA                = "fedramp_eula"
 )
 
 // AvailableFlags returns a FeatureFlagSet of expected feature flags. Feature flag defaults introduced here will become the initial
@@ -86,10 +88,24 @@ func AvailableFlags() FeatureFlagSet {
 			Enabled:       false,
 			UserUpdatable: false,
 		},
+		FeatureClearGraphData: {
+			Key:           FeatureClearGraphData,
+			Name:          "Clear Graph Data",
+			Description:   "Enables the ability to delete all nodes and edges from the graph database.",
+			Enabled:       true,
+			UserUpdatable: false,
+		},
 		FeatureRiskExposureNewCalculation: {
 			Key:           FeatureRiskExposureNewCalculation,
 			Name:          "Use new tier zero risk exposure calculation",
 			Description:   "Enables the use of new tier zero risk exposure metatree metrics.",
+			Enabled:       false,
+			UserUpdatable: false,
+		},
+		FeatureFedRAMPEULA: {
+			Key:           FeatureFedRAMPEULA,
+			Name:          "FedRAMP EULA",
+			Description:   "Enables showing the FedRAMP EULA on every login. (Enterprise only)",
 			Enabled:       false,
 			UserUpdatable: false,
 		},

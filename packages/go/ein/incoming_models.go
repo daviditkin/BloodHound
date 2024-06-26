@@ -120,10 +120,16 @@ type IsUserSpecifiesSanEnabled struct {
 	Value bool
 }
 
+type RoleSeparationEnabled struct {
+	APIResult
+	Value bool
+}
+
 type CARegistryData struct {
 	CASecurity                  CASecurity
 	EnrollmentAgentRestrictions EnrollmentAgentRestrictions
 	IsUserSpecifiesSanEnabled   IsUserSpecifiesSanEnabled
+	RoleSeparationEnabled       RoleSeparationEnabled
 }
 
 type DCRegistryData struct {
@@ -144,6 +150,11 @@ type StrongCertificateBindingEnforcement struct {
 type GPO IngestBase
 
 type AIACA IngestBase
+
+type IssuancePolicy struct {
+	IngestBase
+	GroupLink TypedPrincipal
+}
 
 type RootCA struct {
 	IngestBase

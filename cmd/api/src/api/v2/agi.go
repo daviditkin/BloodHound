@@ -34,6 +34,7 @@ import (
 	"github.com/specterops/bloodhound/headers"
 	"github.com/specterops/bloodhound/log"
 	"github.com/specterops/bloodhound/src/api"
+	"github.com/specterops/bloodhound/src/auth"
 	"github.com/specterops/bloodhound/src/ctx"
 	"github.com/specterops/bloodhound/src/model"
 	"github.com/specterops/bloodhound/src/utils"
@@ -260,12 +261,23 @@ func (s Resources) UpdateAssetGroupSelectors(response http.ResponseWriter, reque
 			api.HandleDatabaseError(request, response, err)
 		} else {
 			if err := s.GraphQuery.UpdateSelectorTags(request.Context(), s.DB, result); err != nil {
-				log.Warnf("failed updating asset group tags; will be retried upon next analysis run: %v", err)
+				log.Warnf("Failed updating asset group tags; will be retried upon next analysis run: %v", err)
 			}
 
 			if assetGroup.Tag == model.TierZeroAssetGroupTag {
 				// When T0 asset group selectors are modified, entire analysis must be re-run
-				s.TaskNotifier.RequestAnalysis()
+				var userId string
+				if user, isUser := auth.GetUserFromAuthCtx(ctx.FromRequest(request).AuthCtx); !isUser {
+					log.Warnf("encountered request analysis for unknown user, this shouldn't happen")
+					userId = "unknown-user-update-asset-group-selectors"
+				} else {
+					userId = user.ID.String()
+				}
+
+				if err := s.DB.RequestAnalysis(request.Context(), userId); err != nil {
+					api.HandleDatabaseError(request, response, err)
+					return
+				}
 			}
 
 			api.WriteBasicResponse(request.Context(), result, http.StatusCreated, response)
@@ -462,7 +474,7 @@ func parseAGMembersFromNodes(nodes graph.NodeSet, selectors model.AssetGroupSele
 		// a member is custom if at least one selector exists for that object ID
 		for _, agSelector := range selectors {
 			if objectId, err := node.Properties.Get(common.ObjectID.String()).String(); err != nil {
-				log.Warnf("objectid is missing for node %d", node.ID)
+				log.Warnf("Objectid is missing for node %d", node.ID)
 			} else if agSelector.Selector == objectId {
 				isCustomMember = true
 			}
@@ -474,14 +486,14 @@ func parseAGMembersFromNodes(nodes graph.NodeSet, selectors model.AssetGroupSele
 		)
 
 		if objectId, err := node.Properties.Get(common.ObjectID.String()).String(); err != nil {
-			log.Warnf("objectid is missing for node %d", node.ID)
+			log.Warnf("Objectid is missing for node %d", node.ID)
 			memberObjectId = ""
 		} else {
 			memberObjectId = objectId
 		}
 
 		if name, err := node.Properties.Get(common.Name.String()).String(); err != nil {
-			log.Warnf("name is missing for node %d", node.ID)
+			log.Warnf("Name is missing for node %d", node.ID)
 			memberName = ""
 		} else {
 			memberName = name

@@ -21,9 +21,10 @@ package queries_test
 
 import (
 	"context"
+	"testing"
+
 	schema "github.com/specterops/bloodhound/graphschema"
 	"github.com/specterops/bloodhound/src/config"
-	"testing"
 
 	adAnalysis "github.com/specterops/bloodhound/analysis/ad"
 	"github.com/specterops/bloodhound/cache"
@@ -283,6 +284,35 @@ func TestGetAssetGroupComboNode(t *testing.T) {
 		// ensure that nodes from within T0 as well as from other domains all have the category tagged
 		require.Equal(t, "Asset Groups", groupACategory)
 		require.Equal(t, "Asset Groups", groupBCategory)
+	})
+}
+
+func TestGetAssetGroupNodes(t *testing.T) {
+	testContext := integration.NewGraphTestContext(t, schema.DefaultGraphSchema())
+	testContext.DatabaseTestWithSetup(func(harness *integration.HarnessDetails) error {
+		harness.AssetGroupNodesHarness.Setup(testContext)
+		return nil
+	}, func(harness integration.HarnessDetails, db graph.Database) {
+		graphQuery := queries.NewGraphQuery(db, cache.Cache{}, config.Configuration{})
+
+		tierZeroNodes, err := graphQuery.GetAssetGroupNodes(context.Background(), harness.AssetGroupNodesHarness.TierZeroTag)
+		require.Nil(t, err)
+
+		customGroup1Nodes, err := graphQuery.GetAssetGroupNodes(context.Background(), harness.AssetGroupNodesHarness.CustomTag1)
+		require.Nil(t, err)
+
+		customGroup2Nodes, err := graphQuery.GetAssetGroupNodes(context.Background(), harness.AssetGroupNodesHarness.CustomTag2)
+		require.Nil(t, err)
+
+		require.True(t, tierZeroNodes.Contains(harness.AssetGroupNodesHarness.GroupB))
+		require.True(t, tierZeroNodes.Contains(harness.AssetGroupNodesHarness.GroupC))
+		require.Equal(t, 2, len(tierZeroNodes))
+
+		require.True(t, customGroup1Nodes.Contains(harness.AssetGroupNodesHarness.GroupD))
+		require.Equal(t, 1, len(customGroup1Nodes))
+
+		require.True(t, customGroup2Nodes.Contains(harness.AssetGroupNodesHarness.GroupE))
+		require.Equal(t, 1, len(customGroup2Nodes))
 	})
 }
 

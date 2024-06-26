@@ -26,6 +26,7 @@ import (
 	"github.com/specterops/bloodhound/dawgs/ops"
 	"github.com/specterops/bloodhound/graphschema/ad"
 	"github.com/specterops/bloodhound/src/api"
+	"github.com/specterops/bloodhound/src/model"
 	"github.com/specterops/bloodhound/src/model/appcfg"
 	"github.com/specterops/bloodhound/src/queries"
 )
@@ -43,11 +44,13 @@ func (s *Resources) handleAdRelatedEntityQuery(response http.ResponseWriter, req
 	} else if results, err := s.GraphQuery.GetADEntityQueryResult(request.Context(), params, entityPanelCachingFlag.Enabled); err != nil {
 		if errors.Is(err, queries.ErrGraphUnsupported) || errors.Is(err, queries.ErrUnsupportedDataType) {
 			api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusBadRequest, fmt.Sprintf(api.FmtErrorResponseDetailsBadQueryParameters, err), request), response)
-		} else if errors.Is(err, ops.ErrTraversalMemoryLimit) {
+		} else if errors.Is(err, ops.ErrGraphQueryMemoryLimit) {
 			api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusInternalServerError, "calculating the request results exceeded memory limitations due to the volume of objects involved", request), response)
 		} else {
 			api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusInternalServerError, "an unknown error occurred during the request", request), response)
 		}
+	} else if params.RequestedType == model.DataTypeGraph {
+		api.WriteJSONResponse(request.Context(), results, http.StatusOK, response)
 	} else {
 		api.WriteJSONResponse(request.Context(), results, http.StatusOK, response)
 	}
@@ -402,4 +405,8 @@ func (s *Resources) ListADGPOAffectedTierZero(response http.ResponseWriter, requ
 		listDelegate = adAnalysis.CreateGPOAffectedIntermediariesListDelegate(adAnalysis.SelectGPOTierZeroCandidateFilter)
 	)
 	s.handleAdRelatedEntityQuery(response, request, queryName, pathDelegate, listDelegate)
+}
+
+func (s *Resources) ListADIssuancePolicyLinkedCertTemplates(response http.ResponseWriter, request *http.Request) {
+	s.handleAdRelatedEntityQuery(response, request, "ListADIssuancePolicyLinkedCertTemplates", adAnalysis.FetchPolicyLinkedCertTemplatePaths, adAnalysis.FetchPolicyLinkedCertTemplates)
 }

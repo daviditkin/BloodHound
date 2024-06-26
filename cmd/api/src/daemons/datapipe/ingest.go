@@ -36,11 +36,11 @@ const (
 	IngestCountThreshold = 500
 )
 
-func ReadFileForIngest(batch graph.Batch, reader io.ReadSeeker) error {
+func ReadFileForIngest(batch graph.Batch, reader io.ReadSeeker, adcsEnabled bool) error {
 	if meta, err := fileupload.ValidateMetaTag(reader, false); err != nil {
 		return fmt.Errorf("error validating meta tag: %w", err)
 	} else {
-		return IngestWrapper(batch, reader, meta)
+		return IngestWrapper(batch, reader, meta, adcsEnabled)
 	}
 }
 
@@ -61,7 +61,7 @@ func IngestAzureData(batch graph.Batch, converted ConvertedAzureData) {
 	IngestRelationships(batch, azure.Entity, converted.RelProps)
 }
 
-func IngestWrapper(batch graph.Batch, reader io.ReadSeeker, meta ingest.Metadata) error {
+func IngestWrapper(batch graph.Batch, reader io.ReadSeeker, meta ingest.Metadata, adcsEnabled bool) error {
 	switch meta.Type {
 	case ingest.DataTypeComputer:
 		if meta.Version >= 5 {
@@ -93,6 +93,8 @@ func IngestWrapper(batch graph.Batch, reader io.ReadSeeker, meta ingest.Metadata
 		return decodeBasicData(batch, reader, convertCertTemplateData)
 	case ingest.DataTypeAzure:
 		return decodeAzureData(batch, reader)
+	case ingest.DataTypeIssuancePolicy:
+		return decodeBasicData(batch, reader, convertIssuancePolicy)
 	}
 
 	return nil

@@ -75,7 +75,7 @@ func setupRequest(user model.User) (context.Context, LoginRequest) {
 	return testCtx, loginRequest
 }
 
-func buildAuditLog(testCtx context.Context, user model.User, loginRequest LoginRequest, status string, loginError error) model.AuditLog {
+func buildAuditLog(testCtx context.Context, user model.User, loginRequest LoginRequest, status model.AuditLogEntryStatus, loginError error) model.AuditLog {
 	bhCtx := ctx.Get(testCtx)
 
 	auditLog := model.AuditLog{
@@ -107,10 +107,10 @@ func TestAuditLogin(t *testing.T) {
 		db: mockDB,
 	}
 	testCtx, loginRequest := setupRequest(testyUser)
-	expectedAuditLog := buildAuditLog(testCtx, testyUser, loginRequest, string(model.AuditLogStatusSuccess), nil)
+	expectedAuditLog := buildAuditLog(testCtx, testyUser, loginRequest, model.AuditLogStatusSuccess, nil)
 
 	mockDB.EXPECT().CreateAuditLog(testCtx, expectedAuditLog)
-	a.auditLogin(testCtx, commitId, testyUser, loginRequest, string(model.AuditLogStatusSuccess), nil)
+	a.auditLogin(testCtx, commitId, testyUser, loginRequest, model.AuditLogStatusSuccess, nil)
 }
 
 func TestAuditLogin_UserNotFound(t *testing.T) {
@@ -120,10 +120,10 @@ func TestAuditLogin_UserNotFound(t *testing.T) {
 		db: mockDB,
 	}
 	testCtx, loginRequest := setupRequest(model.User{})
-	expectedAuditLog := buildAuditLog(testCtx, model.User{}, loginRequest, string(model.AuditLogStatusFailure), ErrInvalidAuth)
+	expectedAuditLog := buildAuditLog(testCtx, model.User{}, loginRequest, model.AuditLogStatusFailure, ErrInvalidAuth)
 
 	mockDB.EXPECT().CreateAuditLog(testCtx, expectedAuditLog)
-	a.auditLogin(testCtx, commitId, model.User{}, loginRequest, string(model.AuditLogStatusFailure), ErrInvalidAuth)
+	a.auditLogin(testCtx, commitId, model.User{}, loginRequest, model.AuditLogStatusFailure, ErrInvalidAuth)
 }
 
 func TestValidateRequestSignature(t *testing.T) {
@@ -213,7 +213,7 @@ func TestValidateRequestSignature(t *testing.T) {
 		require.NoError(t, err)
 
 		req.Header.Add(headers.RequestDate.String(), time.Now().Format(time.RFC3339))
-		signature, err := NewRequestSignature(sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, nil)
+		signature, err := NewRequestSignature(context.Background(), sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, nil)
 		require.NoError(t, err)
 		req.Header.Add(headers.Signature.String(), base64.StdEncoding.EncodeToString(signature))
 
@@ -235,7 +235,7 @@ func TestValidateRequestSignature(t *testing.T) {
 		require.NoError(t, err)
 
 		req.Header.Add(headers.RequestDate.String(), time.Now().Format(time.RFC3339))
-		signature, err := NewRequestSignature(sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, nil)
+		signature, err := NewRequestSignature(context.Background(), sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, nil)
 		require.NoError(t, err)
 		req.Header.Add(headers.Signature.String(), base64.StdEncoding.EncodeToString(signature))
 
@@ -260,7 +260,7 @@ func TestValidateRequestSignature(t *testing.T) {
 		require.NoError(t, err)
 
 		req.Header.Add(headers.RequestDate.String(), time.Now().Format(time.RFC3339))
-		signature, err := NewRequestSignature(sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, nil)
+		signature, err := NewRequestSignature(context.Background(), sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, nil)
 		require.NoError(t, err)
 		req.Header.Add(headers.Signature.String(), base64.StdEncoding.EncodeToString(signature))
 
@@ -290,7 +290,7 @@ func TestValidateRequestSignature(t *testing.T) {
 
 		badRequestDate := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
 		req.Header.Add(headers.RequestDate.String(), badRequestDate)
-		signature, err := NewRequestSignature(sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, nil)
+		signature, err := NewRequestSignature(context.Background(), sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, nil)
 		require.NoError(t, err)
 		req.Header.Add(headers.Signature.String(), base64.StdEncoding.EncodeToString(signature))
 
@@ -317,7 +317,7 @@ func TestValidateRequestSignature(t *testing.T) {
 
 		req.ContentLength = int64(len(payload))
 		req.Header.Add(headers.RequestDate.String(), time.Now().Format(time.RFC3339))
-		signature, err := NewRequestSignature(sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, bytes.NewBuffer(payload))
+		signature, err := NewRequestSignature(context.Background(), sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, bytes.NewBuffer(payload))
 		require.NoError(t, err)
 		req.Header.Add(headers.Signature.String(), base64.StdEncoding.EncodeToString(signature))
 
@@ -359,7 +359,7 @@ func TestValidateRequestSignature(t *testing.T) {
 
 		req.ContentLength = int64(len(payload) - 1)
 		req.Header.Add(headers.RequestDate.String(), time.Now().Format(time.RFC3339))
-		signature, err := NewRequestSignature(sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, bytes.NewBuffer(payload))
+		signature, err := NewRequestSignature(context.Background(), sha256.New, "token", time.Now().Format(time.RFC3339), req.Method, req.RequestURI, bytes.NewBuffer(payload))
 		require.NoError(t, err)
 		req.Header.Add(headers.Signature.String(), base64.StdEncoding.EncodeToString(signature))
 
@@ -392,7 +392,7 @@ func TestValidateRequestSignature(t *testing.T) {
 
 		datetime := time.Now().Format(time.RFC3339)
 		req.Header.Add(headers.RequestDate.String(), datetime)
-		signature, err := NewRequestSignature(sha256.New, "badtoken", datetime, http.MethodGet, req.RequestURI, nil)
+		signature, err := NewRequestSignature(context.Background(), sha256.New, "badtoken", datetime, http.MethodGet, req.RequestURI, nil)
 		require.NoError(t, err)
 		req.Header.Add(headers.Signature.String(), base64.StdEncoding.EncodeToString(signature))
 
@@ -420,7 +420,7 @@ func TestValidateRequestSignature(t *testing.T) {
 
 		datetime := time.Now().Format(time.RFC3339)
 		req.Header.Add(headers.RequestDate.String(), datetime)
-		signature, err := NewRequestSignature(sha256.New, "token", datetime, req.Method, req.RequestURI, nil)
+		signature, err := NewRequestSignature(context.Background(), sha256.New, "token", datetime, req.Method, req.RequestURI, nil)
 		require.NoError(t, err)
 		req.Header.Add(headers.Signature.String(), base64.StdEncoding.EncodeToString(signature))
 

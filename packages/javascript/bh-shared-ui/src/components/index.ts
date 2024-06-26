@@ -102,11 +102,11 @@ export { default as PageWithTitle } from './PageWithTitle';
 export * from './PasswordDialog';
 export { default as PasswordDialog } from './PasswordDialog';
 
+export * from './PasswordResetForm';
+export { default as PasswordResetForm } from './PasswordResetForm';
+
 export * from './PrebuiltSearchList';
 export { default as PrebuiltSearchList } from './PrebuiltSearchList';
-
-export * from './RemoteContent';
-export { default as RemoteContent } from './RemoteContent';
 
 export * from './SAMLProviderTable';
 export { default as SAMLProviderTable } from './SAMLProviderTable';
@@ -143,3 +143,6 @@ export { default as GroupManagementContent } from './GroupManagementContent';
 
 export * from './FileIngest';
 export { default as FileIngest } from './FileIngest';
+
+export * from './WebGLDisabledAlert';
+export { default as WebGLDisabledAlert } from './WebGLDisabledAlert';

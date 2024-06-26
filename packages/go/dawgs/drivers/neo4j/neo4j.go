@@ -34,7 +34,7 @@ const (
 	defaultNeo4jTransactionTimeout = math.MinInt
 )
 
-func newNeo4jDB(ctx context.Context, cfg dawgs.Config) (graph.Database, error) {
+func newNeo4jDB(_ context.Context, cfg dawgs.Config) (graph.Database, error) {
 	if connectionURLStr, typeOK := cfg.DriverCfg.(string); !typeOK {
 		return nil, fmt.Errorf("expected string for configuration type but got %T", cfg.DriverCfg)
 	} else if connectionURL, err := url.Parse(connectionURLStr); err != nil {
@@ -55,7 +55,7 @@ func newNeo4jDB(ctx context.Context, cfg dawgs.Config) (graph.Database, error) {
 				limiter:                   channels.NewConcurrencyLimiter(DefaultConcurrentConnections),
 				writeFlushSize:            DefaultWriteFlushSize,
 				batchWriteSize:            DefaultBatchWriteSize,
-				traversalMemoryLimit:      cfg.TraversalMemoryLimit,
+				graphQueryMemoryLimit:     cfg.GraphQueryMemoryLimit,
 			}, nil
 		}
 	}

@@ -40,7 +40,7 @@ func RegisterFossGlobalMiddleware(routerInst *router.Router, cfg config.Configur
 
 	// Set up logging. This must be done after ContextMiddleware is initialized so the context can be accessed in the log logic
 	if cfg.EnableAPILogging {
-		routerInst.UsePrerouting(middleware.LoggingMiddleware(cfg, identityResolver, db))
+		routerInst.UsePrerouting(middleware.LoggingMiddleware(identityResolver))
 	}
 
 	routerInst.UsePostrouting(
@@ -60,6 +60,7 @@ func RegisterFossRoutes(
 	collectorManifests config.CollectorManifests,
 	authenticator api.Authenticator,
 	taskNotifier datapipe.Tasker,
+	authorizer auth.Authorizer,
 ) {
 	router.With(middleware.DefaultRateLimitMiddleware,
 		// Health Endpoint
@@ -73,9 +74,9 @@ func RegisterFossRoutes(
 		}),
 
 		// Static asset handling for the UI
-		routerInst.PathPrefix("/ui", static.Handler()),
+		routerInst.PathPrefix("/ui", static.AssetHandler),
 	)
 
-	var resources = v2.NewResources(rdms, graphDB, cfg, apiCache, graphQuery, collectorManifests, taskNotifier)
+	var resources = v2.NewResources(rdms, graphDB, cfg, apiCache, graphQuery, collectorManifests, taskNotifier, authorizer)
 	NewV2API(cfg, resources, routerInst, authenticator)
 }
