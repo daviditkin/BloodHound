@@ -56,13 +56,24 @@ import { extractSelectedEdge, extractSelectedNode, initGraphEdges, initGraphNode
 import ContextMenu from './ContextMenu/ContextMenu';
 import useQueryParams from 'src/hooks/useQueryParams';
 import { startGenericQuery } from 'src/ducks/explore/actions';
+import { useNotifications } from 'bh-shared-ui';
 
 const GraphView: FC = () => {
     /* Hooks */
     const theme = useTheme();
     const dispatch = useAppDispatch();
+    const { addNotification } = useNotifications();
 
     const graphState: GraphState = useAppSelector((state) => state.explore);
+    // Hackathon
+    const selectedEdge = useAppSelector((state) => state.edgeinfo.selectedEdge);
+    const selectedNode = useAppSelector((state) => state.entityinfo.selectedNode);
+    const expandedRelationships = useAppSelector((state) => state.entityinfo.expandedRelationships);
+    const tabKey = useAppSelector((state) => state.search.activeTab);
+    const primary = useAppSelector((state) => state.search.primary);
+    const secondary = useAppSelector((state) => state.search.secondary);
+    const cypher = useAppSelector((state) => state.search.cypher);
+     //end Hackathon
     const opts: GlobalOptionsState = useAppSelector((state) => state.global.options);
     const formIsDirty = Object.keys(useAppSelector((state) => state.tierzero).changelog).length > 0;
 
@@ -77,6 +88,7 @@ const GraphView: FC = () => {
     type ExploreViewState = {
         primaryQuery?: string;
         secondaryQuery?: string;
+        graphQueryType: string;
         cypherQuery?: string;
         activeGraph?: any;
         selected?: string;
@@ -251,12 +263,37 @@ const GraphView: FC = () => {
 
     const options: GraphButtonOptions = { standard: true, sequential: true };
 
+    // Hackathon Block 
+    // To do: put in right place and correct type
+    const setShareUrlParams = (): void => {
+        const urlPayload: ExploreViewState = {
+            selected: selectedNode?.id || selectedEdge?.id,
+            graphQueryType: tabKey,
+            ...!!primary.searchTerm && { primary: primary.searchTerm },
+            ...!!secondary.searchTerm && { secondary: secondary.searchTerm },
+            ...!!cypher.searchTerm && { cypherQuery: cypher.searchTerm },
+            activeGraph: graphState.latestPayload,
+            ...!!expandedRelationships.length && { expandedRelationships }
+        }
+        const encryptedObject = btoa(JSON.stringify(urlPayload));
+        const formattedUrl = `${window.location.href}?view=${encryptedObject}` 
+        navigator.clipboard.writeText(formattedUrl);    
+        addNotification('Current URL copied to clipboard. Share away!');
+    }
+     //end  Hackathon Block 
+
     const nonLayoutButtons: GraphButtonProps[] = [
         {
             displayText: 'Search Current Results',
             onClick: toggleCurrentSearch,
             disabled: currentSearchOpen,
         },
+        // Hackathon Block
+        {
+            displayText: 'Share Graph',
+            onClick: setShareUrlParams,
+        },
+        // End Hackathon Block
     ];
 
     const findNodeAndSelect = (id: string) => {
@@ -267,6 +304,7 @@ const GraphView: FC = () => {
             dispatch(setSelectedNode(currentlySelectedNode));
         }
     };
+
 
     /* Event Handlers */
     const onClickNode = (id: string) => {
