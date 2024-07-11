@@ -26,6 +26,8 @@ import (
 	"github.com/specterops/bloodhound/src/api/router"
 	"github.com/specterops/bloodhound/src/api/static"
 	v2 "github.com/specterops/bloodhound/src/api/v2"
+	"github.com/specterops/bloodhound/src/api/v2/handlers"
+	"github.com/specterops/bloodhound/src/app"
 	"github.com/specterops/bloodhound/src/auth"
 	"github.com/specterops/bloodhound/src/config"
 	"github.com/specterops/bloodhound/src/database"
@@ -59,6 +61,7 @@ func RegisterFossRoutes(
 	collectorManifests config.CollectorManifests,
 	authenticator api.Authenticator,
 	authorizer auth.Authorizer,
+	bhApp app.BHApp,
 ) {
 	router.With(middleware.DefaultRateLimitMiddleware,
 		// Health Endpoint
@@ -75,6 +78,10 @@ func RegisterFossRoutes(
 		routerInst.PathPrefix("/ui", static.AssetHandler),
 	)
 
-	var resources = v2.NewResources(rdms, graphDB, cfg, apiCache, graphQuery, collectorManifests, authorizer)
-	NewV2API(cfg, resources, routerInst, authenticator)
+	var (
+		resources = v2.NewResources(rdms, graphDB, cfg, apiCache, graphQuery, collectorManifests, authorizer)
+		handlers  = handlers.NewHandlers(bhApp)
+	)
+
+	NewV2API(cfg, resources, routerInst, authenticator, handlers)
 }
