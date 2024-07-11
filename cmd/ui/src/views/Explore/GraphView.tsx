@@ -73,7 +73,7 @@ const GraphView: FC = () => {
     const primary = useAppSelector((state) => state.search.primary);
     const secondary = useAppSelector((state) => state.search.secondary);
     const cypher = useAppSelector((state) => state.search.cypher);
-     //end Hackathon
+    //end Hackathon
     const opts: GlobalOptionsState = useAppSelector((state) => state.global.options);
     const formIsDirty = Object.keys(useAppSelector((state) => state.tierzero).changelog).length > 0;
 
@@ -88,32 +88,12 @@ const GraphView: FC = () => {
     type ExploreViewState = {
         primaryQuery?: string;
         secondaryQuery?: string;
-        graphQueryType: string;
+        graphQueryType?: string;
         cypherQuery?: string;
         activeGraph?: any;
         selected?: string;
         expandedRelationships?: string[];
     };
-
-    const test = {
-        primaryQuery: 'test1',
-        secondaryQuery: 'test2',
-        cypherQuery: 'test3',
-        activeGraph: {
-            label: 'Member Of',
-            kind: 'Computer',
-            objectId: 'S-1-5-21-570004220-2248230615-4072641716-1002',
-        },
-        selected: '260',
-        expandedRelationships: [
-            'S-1-5-21-570004220-2248230615-4072641716-1000Inbound Execution Privileges',
-            'S-1-5-21-570004220-2248230615-4072641716-1000Local Admins',
-            'S-1-5-21-570004220-2248230615-4072641716-1000Member Of',
-            'S-1-5-21-570004220-2248230615-4072641716-1002Member Of',
-        ],
-    };
-
-    console.log(btoa(JSON.stringify(test)));
 
     const { queryParams, deleteQueryParam } = useQueryParams();
     const [initialSelectedEntityId, setInitialSelectedEntityId] = useState<string | null>(null);
@@ -133,6 +113,9 @@ const GraphView: FC = () => {
                 }
                 if (initialView.cypherQuery) {
                     dispatch(searchbarActions.cypherQueryEdited(initialView.cypherQuery));
+                }
+                if (initialView.graphQueryType) {
+                    dispatch(searchbarActions.tabChanged(tabKey));
                 }
                 if (initialView.activeGraph) {
                     dispatch(startGenericQuery(initialView.activeGraph));
@@ -155,6 +138,25 @@ const GraphView: FC = () => {
         initGraphology();
         selectEntityFromInitialState();
     }, [graphState.chartProps.items]);
+
+    // Hackathon Block
+    // To do: put in right place and correct type
+    const setShareUrlParams = (): void => {
+        const urlPayload: ExploreViewState = {
+            selected: selectedNode?.graphId || selectedEdge?.id,
+            graphQueryType: tabKey,
+            ...(!!primary.searchTerm && { primaryQuery: primary.searchTerm }),
+            ...(!!secondary.searchTerm && { secondaryQuery: secondary.searchTerm }),
+            ...(!!cypher.searchTerm && { cypherQuery: cypher.searchTerm }),
+            activeGraph: graphState.latestPayload,
+            ...(!!expandedRelationships.length && { expandedRelationships }),
+        };
+        const encryptedObject = btoa(JSON.stringify(urlPayload));
+        const formattedUrl = `${window.location.href}?view=${encryptedObject}`;
+        navigator.clipboard.writeText(formattedUrl);
+        addNotification('Current URL copied to clipboard. Share away!');
+    };
+    //end  Hackathon Block
 
     const selectEntityFromInitialState = () => {
         if (initialSelectedEntityId) {
@@ -263,25 +265,6 @@ const GraphView: FC = () => {
 
     const options: GraphButtonOptions = { standard: true, sequential: true };
 
-    // Hackathon Block 
-    // To do: put in right place and correct type
-    const setShareUrlParams = (): void => {
-        const urlPayload: ExploreViewState = {
-            selected: selectedNode?.id || selectedEdge?.id,
-            graphQueryType: tabKey,
-            ...!!primary.searchTerm && { primary: primary.searchTerm },
-            ...!!secondary.searchTerm && { secondary: secondary.searchTerm },
-            ...!!cypher.searchTerm && { cypherQuery: cypher.searchTerm },
-            activeGraph: graphState.latestPayload,
-            ...!!expandedRelationships.length && { expandedRelationships }
-        }
-        const encryptedObject = btoa(JSON.stringify(urlPayload));
-        const formattedUrl = `${window.location.href}?view=${encryptedObject}` 
-        navigator.clipboard.writeText(formattedUrl);    
-        addNotification('Current URL copied to clipboard. Share away!');
-    }
-     //end  Hackathon Block 
-
     const nonLayoutButtons: GraphButtonProps[] = [
         {
             displayText: 'Search Current Results',
@@ -304,7 +287,6 @@ const GraphView: FC = () => {
             dispatch(setSelectedNode(currentlySelectedNode));
         }
     };
-
 
     /* Event Handlers */
     const onClickNode = (id: string) => {
