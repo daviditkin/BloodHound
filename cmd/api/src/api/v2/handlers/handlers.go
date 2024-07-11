@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -46,19 +47,25 @@ func (s Handlers) ProcessFileUpload(response http.ResponseWriter, request *http.
 
 	// todo: handler needs to be just validation and pass it through to the app.
 	if !isValidContentTypeForUpload(request.Header) {
-		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusBadRequest, fmt.Sprintf("Content type must be application/json or application/zip"), request), response)
+		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusBadRequest, "Content type must be application/json or application/zip", request), response)
 	} else if fileUploadJobID, err := strconv.Atoi(fileUploadJobIdString); err != nil {
 		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusBadRequest, api.ErrorResponseDetailsIDMalformed, request), response)
 	} else if fileType, validationStrategy, err := matchHeaders(request.Header); err != nil {
-		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusBadRequest, fmt.Sprintf("error matching headers: %v", err), request), response)
+		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusBadRequest, fmt.Sprintf("Error matching headers: %v", err), request), response)
 	} else if fileUploadJob, err := s.bhApp.GetFileUploadJobByID(request.Context(), int64(fileUploadJobID)); err != nil {
 		api.HandleDatabaseError(request, response, err)
-	} else if fileName, err := s.bhApp.SaveIngestFile(request.Body, fileType, validationStrategy); err != nil {
+	} else if fileName, err := s.bhApp.SaveIngestFile(request.Body, fileType, validationStrategy); errors.Is(err, app.ErrFileValidation) {
+		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusBadRequest, fmt.Sprintf("File validation failed: %v", err), request), response)
+	} else if err != nil {
 		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusInternalServerError, fmt.Sprintf("Error saving ingest file: %v", err), request), response)
-	} else if _, err = s.bhApp.CreateIngestTask(request.Context(), fileName, fileType, requestId, int64(fileUploadJobID)); err != nil {
-		api.HandleDatabaseError(request, response, err)
+	} else if _, err = s.bhApp.CreateIngestTask(request.Context(), fileName, fileType, requestId, int64(fileUploadJobID)); errors.Is(err, app.ErrGenericDatabaseFailure) {
+		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusInternalServerError, api.ErrorResponseDetailsInternalServerError, request), response)
+	} else if errors.Is(err, app.ErrNotFound) {
+		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusNotFound, "Ingest task not found", request), response)
+	} else if err != nil {
+		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusInternalServerError, fmt.Sprintf("Error creating ingest task: %v", err), request), response)
 	} else if err = s.bhApp.TouchFileUploadJobLastIngest(request.Context(), fileUploadJob); err != nil {
-		api.HandleDatabaseError(request, response, err)
+		api.WriteErrorResponse(request.Context(), api.BuildErrorResponse(http.StatusInternalServerError, api.ErrorResponseDetailsInternalServerError, request), response)
 	} else {
 		response.WriteHeader(http.StatusAccepted)
 	}

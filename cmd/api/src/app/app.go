@@ -18,6 +18,11 @@ import (
 	"github.com/specterops/bloodhound/src/model/ingest"
 )
 
+var ErrNotFound = errors.New("not found")
+var ErrFileValidation = errors.New("file validation failed")
+var ErrGenericDatabaseFailure = errors.New("database failure")
+var ErrInvalidJSON = errors.New("file is not valid json")
+
 type BHApp struct {
 	// adapter adapter.PostgresAdapter
 	db  database.Database
@@ -34,7 +39,13 @@ func NewBHApp(db database.Database, cfg config.Configuration) BHApp {
 
 // note: stage 1 will not return app models from the app methods.
 func (s BHApp) GetFileUploadJobByID(ctx context.Context, jobID int64) (model.FileUploadJob, error) {
-	return s.db.GetFileUploadJob(ctx, jobID)
+	if job, err := s.db.GetFileUploadJob(ctx, jobID); errors.Is(err, database.ErrNotFound) {
+		return job, fmt.Errorf("get file upload job by id: %w: %v", ErrNotFound, err)
+	} else if err != nil {
+		return job, fmt.Errorf("get file upload job by id: %w: %v", ErrGenericDatabaseFailure, err)
+	} else {
+		return job, nil
+	}
 }
 
 func (s BHApp) CreateIngestTask(ctx context.Context, filename string, fileType model.FileType, requestID string, jobID int64) (model.IngestTask, error) {
@@ -45,18 +56,26 @@ func (s BHApp) CreateIngestTask(ctx context.Context, filename string, fileType m
 		FileType:    fileType,
 	}
 
-	return s.db.CreateIngestTask(ctx, newIngestTask)
+	if task, err := s.db.CreateIngestTask(ctx, newIngestTask); err != nil {
+		return task, fmt.Errorf("create ingest task: %w: %v", ErrGenericDatabaseFailure, err)
+	} else {
+		return task, nil
+	}
 }
 
 func (s BHApp) TouchFileUploadJobLastIngest(ctx context.Context, fileUploadJob model.FileUploadJob) error {
 	fileUploadJob.LastIngest = time.Now().UTC()
-	return s.db.UpdateFileUploadJob(ctx, fileUploadJob)
+	if err := s.db.UpdateFileUploadJob(ctx, fileUploadJob); err != nil {
+		return fmt.Errorf("touch last ingest: %w: %v", ErrGenericDatabaseFailure, err)
+	} else {
+		return nil
+	}
 }
 
 func (s BHApp) SaveIngestFile(body io.ReadCloser, fileType model.FileType, validationStrategy FileValidator) (string, error) {
 	tempFile, err := os.CreateTemp(s.cfg.TempDirectory(), "bh")
 	if err != nil {
-		return "", fmt.Errorf("error creating ingest file: %w", err)
+		return "", fmt.Errorf("creating ingest file: %v", err)
 	}
 
 	if err := validationStrategy(body, tempFile); err != nil {
@@ -65,7 +84,7 @@ func (s BHApp) SaveIngestFile(body io.ReadCloser, fileType model.FileType, valid
 		} else if err := os.Remove(tempFile.Name()); err != nil {
 			log.Errorf("Error deleting temp file %s: %v", tempFile.Name(), err)
 		}
-		return tempFile.Name(), err
+		return tempFile.Name(), fmt.Errorf("saving ingest file: %w: %v", ErrFileValidation, err)
 	} else {
 		if err := tempFile.Close(); err != nil {
 			log.Errorf("Error closing temp file with successful validation %s: %v", tempFile.Name(), err)
@@ -77,8 +96,6 @@ func (s BHApp) SaveIngestFile(body io.ReadCloser, fileType model.FileType, valid
 type FileValidator func(src io.Reader, dst io.Writer) error
 
 var ZipMagicBytes = []byte{0x50, 0x4b, 0x03, 0x04}
-
-var ErrInvalidJSON = errors.New("file is not valid json")
 
 // ValidateMetaTag ensures that the correct tags are present in a json file for data ingest.
 // If readToEnd is set to true, the stream will read to the end of the file (needed for TeeReader)
